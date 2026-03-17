@@ -1,0 +1,11 @@
+version: '3'
+
+services:
+  suno-api:
+    build:
+      context: .
+      args:
+        SUNO_COOKIE: ${SUNO_COOKIE}
+    ports:
+      - "3000:3000"
+    env_file: ".env"
