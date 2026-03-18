@@ -64,7 +64,7 @@ function sanitize(data: unknown): unknown {
       (m) => `${m.substring(0, 8)}...`
     );
   if (typeof data === 'object') {
-    const out: Record<string, unknown> = Array.isArray(data) ? [] : {};
+    const out = (Array.isArray(data) ? [] : {}) as Record<string, unknown>;
     for (const key in data as Record<string, unknown>) {
       const lower = key.toLowerCase();
       if (
@@ -122,7 +122,7 @@ async function launchBrowserContext(
       '--disable-gpu',
       '--disable-setuid-sandbox'
     );
-  if (!options.headless) args.push('--auto-open-devtools-for-tabs');
+  // if (!options.headless) args.push('--auto-open-devtools-for-tabs');
 
   const browser = await getBrowserType().launch({
     args,
@@ -265,7 +265,8 @@ export async function captureCaptchaToken(
   }
 
   let cursor: Cursor | undefined;
-  if (options.ghostCursor) cursor = await createCursor(page);
+  if (options.ghostCursor)
+    cursor = await createCursor(page as Parameters<typeof createCursor>[0]);
 
   log.info('Triggering the CAPTCHA');
 
@@ -339,37 +340,53 @@ export async function captureCaptchaToken(
     });
   });
 
-  log.info('Looking for song description textarea...');
-  let textarea: Locator;
+  const randomDescBtn = page.locator(
+    'button[aria-label="Generate random song description"]'
+  );
+  let usedRandomDesc = false;
   try {
-    textarea = page.locator('textarea[placeholder*="Hip-hop"]');
-    await textarea.waitFor({
-      state: 'visible',
-      timeout: TIMEOUTS.TEXTAREA_WAIT
-    });
-    log.info('Found textarea with Hip-hop placeholder');
+    await randomDescBtn.waitFor({ state: 'visible', timeout: 3000 });
+    log.info('Found "Generate random song description" button, clicking...');
+    await randomDescBtn.click();
+    await sleep(1);
+    usedRandomDesc = true;
   } catch {
-    const textareas = page.locator('textarea');
-    const count = await textareas.count();
-    log.info(`Found ${count} textareas on page`);
-    let found: Locator | null = null;
-    for (let i = 0; i < count; i++) {
-      const ta = textareas.nth(i);
-      if (await ta.isVisible()) {
-        found = ta;
-        log.info(`Using textarea at index ${i}`);
-        break;
-      }
-    }
-    if (!found) throw new Error('Could not find any visible textarea');
-    textarea = found;
+    log.info('Random description button not found - will fill textarea');
   }
 
-  const testPrompt = process.env.CAPTCHA_TEST_PROMPT || 'Lorem ipsum';
-  log.info('Filling textarea with test prompt...');
-  await textarea.focus();
-  await textarea.fill(testPrompt);
-  log.info('Textarea filled successfully');
+  if (!usedRandomDesc) {
+    log.info('Looking for song description textarea...');
+    let textarea: Locator;
+    try {
+      textarea = page.locator('textarea[placeholder*="Hip-hop"]');
+      await textarea.waitFor({
+        state: 'visible',
+        timeout: TIMEOUTS.TEXTAREA_WAIT
+      });
+      log.info('Found textarea with Hip-hop placeholder');
+    } catch {
+      const textareas = page.locator('textarea');
+      const count = await textareas.count();
+      log.info(`Found ${count} textareas on page`);
+      let found: Locator | null = null;
+      for (let i = 0; i < count; i++) {
+        const ta = textareas.nth(i);
+        if (await ta.isVisible()) {
+          found = ta;
+          log.info(`Using textarea at index ${i}`);
+          break;
+        }
+      }
+      if (!found) throw new Error('Could not find any visible textarea');
+      textarea = found;
+    }
+
+    const testPrompt = process.env.CAPTCHA_TEST_PROMPT || 'Lorem ipsum';
+    log.info('Filling textarea with test prompt...');
+    await textarea.focus();
+    await textarea.fill(testPrompt);
+    log.info('Textarea filled successfully');
+  }
 
   log.info('Looking for Create button...');
   const button = page.locator('button[aria-label="Create song"]');

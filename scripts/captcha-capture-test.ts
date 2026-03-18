@@ -53,10 +53,12 @@ async function main() {
     });
 
     if (token) {
-      console.log(
-        'Success. Captured token (redacted):',
-        token.substring(0, 20) + '...'
-      );
+      const head = token.substring(0, 20);
+      const tail = token.length > 40 ? token.substring(token.length - 20) : '';
+      const redacted = tail
+        ? `${head}...${tail}`
+        : head + (token.length > 20 ? '...' : '');
+      console.log('Success. Captured token (redacted):', redacted);
     } else {
       console.log('No token captured (CAPTCHA might not have been required).');
     }
