@@ -3,7 +3,10 @@ import UserAgent from 'user-agents';
 import pino from 'pino';
 import yn from 'yn';
 import { isPage, sleep, waitForRequests } from '@/lib/utils';
-import { captureCaptchaToken } from '@/lib/captchaCapture';
+import {
+  captureCaptchaToken,
+  parseCoordinatesData
+} from '@/lib/captchaCapture';
 import * as cookie from 'cookie';
 import { randomUUID } from 'node:crypto';
 import { Solver } from '@2captcha/captcha-solver';
@@ -796,7 +799,8 @@ class SunoApi {
   }
 
   /**
-   * Solves CAPTCHA using 2Captcha service with retry logic
+   * Solves CAPTCHA using 2Captcha service with retry logic.
+   * Uses parseCoordinatesData to handle both array and string coordinate formats from 2Captcha API.
    * @param challenge The challenge container locator
    * @param isDrag Whether this is a drag-type CAPTCHA
    * @returns CAPTCHA solution or null if failed
@@ -818,18 +822,28 @@ class SunoApi {
           lang: process.env.BROWSER_LOCALE
         };
         if (isDrag) {
-          // Provide instructions for drag-type CAPTCHA
           payload.textinstructions =
             'CLICK on the shapes at their edge or center as shown above—please be precise!';
-          payload.imginstructions = (
-            await fs.readFile(
-              path.join(process.cwd(), 'public', 'drag-instructions.jpg')
-            )
-          ).toString('base64');
+          const instructionsPath = path.join(
+            process.cwd(),
+            'public',
+            'drag-instructions.jpg'
+          );
+          try {
+            payload.imginstructions = (
+              await fs.readFile(instructionsPath)
+            ).toString('base64');
+          } catch {
+            logger.warn('drag-instructions.jpg not found, proceeding without');
+          }
         }
-        return (await this.solver.coordinates(
-          payload
-        )) as unknown as CaptchaSolution;
+        const raw = await this.solver.coordinates(payload);
+        const data = parseCoordinatesData(raw.data);
+        logger.debug(
+          { taskId: raw.id, coordCount: data.length },
+          '2Captcha coordinates parsed'
+        );
+        return { id: raw.id, data };
       } catch (err) {
         const error = toError(err);
         logger.info(error.message);

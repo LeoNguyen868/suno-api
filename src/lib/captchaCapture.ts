@@ -93,7 +93,7 @@ function sanitize(data: unknown): unknown {
  * - Array format: [{"x":"169","y":"298"}, ...] (API v2 / newer lib)
  * - String format: "coordinates:x=192,y=177;x=54,y=431" (API v1)
  */
-function parseCoordinatesData(data: unknown): CaptchaCoordinate[] {
+export function parseCoordinatesData(data: unknown): CaptchaCoordinate[] {
   if (Array.isArray(data)) {
     const coords: CaptchaCoordinate[] = [];
     for (const item of data) {
@@ -370,52 +370,18 @@ export async function captureCaptchaToken(
   const randomDescBtn = page.locator(
     'button[aria-label="Generate random song description"]'
   );
-  let usedRandomDesc = false;
   try {
     await randomDescBtn.waitFor({ state: 'visible', timeout: 3000 });
     log.info('Found "Generate random song description" button, clicking...');
     await randomDescBtn.click();
     await sleep(1);
-    usedRandomDesc = true;
   } catch {
-    log.info('Random description button not found - will fill textarea');
+    log.info('Random description button not found - continuing');
   }
 
-  if (!usedRandomDesc) {
-    log.info('Looking for song description textarea...');
-    let textarea: Locator;
-    try {
-      textarea = page.locator('textarea[placeholder*="Hip-hop"]');
-      await textarea.waitFor({
-        state: 'visible',
-        timeout: TIMEOUTS.TEXTAREA_WAIT
-      });
-      log.info('Found textarea with Hip-hop placeholder');
-    } catch {
-      const textareas = page.locator('textarea');
-      const count = await textareas.count();
-      log.info(`Found ${count} textareas on page`);
-      let found: Locator | null = null;
-      for (let i = 0; i < count; i++) {
-        const ta = textareas.nth(i);
-        if (await ta.isVisible()) {
-          found = ta;
-          log.info(`Using textarea at index ${i}`);
-          break;
-        }
-      }
-      if (!found) throw new Error('Could not find any visible textarea');
-      textarea = found;
-    }
-
-    const testPrompt = process.env.CAPTCHA_TEST_PROMPT || 'Lorem ipsum';
-    log.info('Filling textarea with test prompt...');
-    await textarea.focus();
-    await textarea.fill(testPrompt);
-    log.info('Textarea filled successfully');
-  }
-
-  log.info('Looking for Create button...');
+  log.info(
+    'Looking for Create button (press generate first, skip textarea)...'
+  );
   const button = page.locator('button[aria-label="Create song"]');
   await button.waitFor({
     state: 'visible',
