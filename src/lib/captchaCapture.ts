@@ -87,6 +87,34 @@ function sanitize(data: unknown): unknown {
   return data;
 }
 
+/**
+ * Parse 2Captcha coordinates API response into CaptchaCoordinate array.
+ * Supports:
+ * - Array format: [{"x":"169","y":"298"}, ...] (API v2 / newer lib)
+ * - String format: "coordinates:x=192,y=177;x=54,y=431" (API v1)
+ */
+function parseCoordinatesData(data: unknown): CaptchaCoordinate[] {
+  if (Array.isArray(data)) {
+    const coords: CaptchaCoordinate[] = [];
+    for (const item of data) {
+      if (item && typeof item === 'object' && 'x' in item && 'y' in item) {
+        const x = +Number((item as { x: unknown }).x);
+        const y = +Number((item as { y: unknown }).y);
+        if (!Number.isNaN(x) && !Number.isNaN(y)) coords.push({ x, y });
+      }
+    }
+    return coords;
+  }
+  const str = String(data || '');
+  const normalized = str.replace(/^coordinates?:/i, '').trim();
+  const coords: CaptchaCoordinate[] = [];
+  for (const pair of normalized.split(';')) {
+    const m = pair.trim().match(/x=(\d+)\s*,\s*y=(\d+)/i);
+    if (m) coords.push({ x: +m[1], y: +m[2] });
+  }
+  return coords;
+}
+
 export interface CaptchaCaptureOptions {
   cookies: Record<string, string | undefined>;
   userAgent?: string;
@@ -122,7 +150,6 @@ async function launchBrowserContext(
       '--disable-gpu',
       '--disable-setuid-sandbox'
     );
-  // if (!options.headless) args.push('--auto-open-devtools-for-tabs');
 
   const browser = await getBrowserType().launch({
     args,
@@ -451,9 +478,24 @@ export async function captureCaptchaToken(
             log.warn('drag-instructions.jpg not found, proceeding without');
           }
         }
-        return (await solver.coordinates(
-          payload
-        )) as unknown as CaptchaSolution;
+        const raw = await solver.coordinates(payload);
+        const data = parseCoordinatesData(raw.data);
+        log.info(
+          { taskId: raw.id, rawLen: raw.data?.length, coordCount: data.length },
+          `2Captcha response: ${data.length} coordinates parsed from raw data`
+        );
+        log.debug({ coords: data, rawData: raw.data }, 'Parsed coordinates');
+        if (data.length === 0 && raw.data !== undefined)
+          log.warn(
+            {
+              rawPreview:
+                typeof raw.data === 'string'
+                  ? raw.data.substring(0, 80)
+                  : JSON.stringify(raw.data).slice(0, 80)
+            },
+            'Parsed 0 coords'
+          );
+        return { id: raw.id, data };
       } catch (err) {
         log.info(toError(err).message);
         if (attempt < 2) log.info('Retrying...');
@@ -521,6 +563,10 @@ export async function captureCaptchaToken(
           .first()
           .innerText();
         const isDragType = promptText.toLowerCase().includes('drag');
+        log.info(
+          { prompt: promptText.slice(0, 60), isDragType },
+          'CAPTCHA type'
+        );
         const solution = await solveCaptchaWithRetry(challenge, isDragType);
         if (!solution)
           throw new Error('Failed to solve CAPTCHA after 3 attempts');
@@ -529,6 +575,10 @@ export async function captureCaptchaToken(
             shouldWaitForImages = false;
             continue;
           }
+          log.info(
+            { pairCount: solution.data.length / 2 },
+            'Performing drag interaction'
+          );
           const box = await challenge.boundingBox();
           if (!box) throw new Error('.challenge-container boundingBox is null');
           await performDragInteraction(page, box, solution);

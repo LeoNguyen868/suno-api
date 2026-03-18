@@ -13,7 +13,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "captcha-test": "BROWSER_HEADLESS=false npx tsx scripts/captcha-capture-test.ts"
+    "captcha-test": "BROWSER_HEADLESS=true npx tsx scripts/captcha-capture-test.ts"
   },
   "dependencies": {
     "@2captcha/captcha-solver": "^1.3.0",

@@ -1,6 +1,6 @@
 /**
  * Standalone CAPTCHA capture test script.
- * Runs with visible (non-headless) browser and verbose logging for manual observation.
+ * Runs with headless browser and verbose logging.
  *
  * Usage:
  *   cd suno-api && npm run captcha-test
@@ -37,16 +37,14 @@ async function main() {
   const cookies = cookie.parse(sunoCookie);
   const userAgent = new UserAgent(/Macintosh/).random().toString();
 
-  console.log(
-    'Starting CAPTCHA capture test (visible browser, verbose logs)...'
-  );
+  console.log('Starting CAPTCHA capture test (headless, verbose logs)...');
   console.log('Env: BROWSER_HEADLESS=' + process.env.BROWSER_HEADLESS);
 
   try {
     const token = await captureCaptchaToken({
       cookies,
       userAgent,
-      headless: false,
+      headless: true,
       verbose: true,
       ghostCursor: false,
       twoCaptchaKey
